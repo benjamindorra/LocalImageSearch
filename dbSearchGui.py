@@ -3,7 +3,7 @@
 import PyQt6.QtCore as qtc
 from PyQt6.QtGui import QPalette, QPixmap, QDrag
 import PyQt6.QtWidgets as qtw
-from dbSearch import get_df, get_imgs, searchText, searchImg, getFromTo, getNumChunks
+from dbSearch import get_imgs, searchImg, getFromTo, getNumChunks
 import dbIndex
 import traceback
 import sys
