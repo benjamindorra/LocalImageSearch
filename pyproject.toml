@@ -1,0 +1,14 @@
+[project]
+name = "localimagesearch"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "joblib>=1.5.2",
+    "numpy>=2.3.3",
+    "onnxruntime>=1.22.1",
+    "pandas>=2.3.2",
+    "pillow>=11.3.0",
+    "pyqt6>=6.9.1",
+]
