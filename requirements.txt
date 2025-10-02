@@ -4,3 +4,7 @@ pandas
 Pillow
 PyQt6
 joblib
+ftfy
+regex
+scipy
+

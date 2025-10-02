@@ -1,5 +1,5 @@
 """
-Program for keywords and image searching in a custom children drawings database
+Program for keywords and image searching in a set of images
 
 Backend for the GUI (python dbSearchGui.py)
 """
@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import unicodedata
 import onnxImageSearch as imsearch
+from VLMEncoder.openclip_tokenizer import encode_text
+from VLMEncoder.mobileclip_image_transforms import load_image, encode_image
 
 def get_imgs(imgDir):
   #imgDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
@@ -53,6 +55,37 @@ def searchImg(input_image_path,df,model_path,encoded_images_path,signal=None,tid
   # Sort dataframe by decreasing order of similarity
   returnValue = []
   title = 'Results for image '+str(input_image_path)
+  sorted_results = np.argsort(cos_values)[::-1]
+  result = df.reindex(sorted_results)
+  result = result.reset_index(drop=True)
+  returnValue.append([title, result])
+
+  return returnValue
+
+def searchText(input_text,df,model_path,encoded_images_path,signal=None,tid=None):
+  # Load all images encoding
+  encoding_dict = load(encoded_images_path)
+
+  # Load encoder
+  session = imsearch.load_onnx_model(model_path)
+
+  # Encode input text
+  input_text_encoding = encode_text(session, input_text)
+
+  # Get similarity to the whole dataset
+  n_images = len(encoding_dict.keys())
+  images_index = list(encoding_dict.keys())
+  cos_values = np.zeros(n_images)
+  for i, image_encoding in enumerate(encoding_dict.values()):
+    cos_values[i] = imsearch.cos_sim(input_text_encoding, image_encoding)
+    if signal != None:
+        signal.emit(tid)
+    else:
+        print(i,'/',nImages,end='\r')
+
+  # Sort dataframe by decreasing order of similarity
+  returnValue = []
+  title = 'Results for query '+str(input_text)
   sorted_results = np.argsort(cos_values)[::-1]
   result = df.reindex(sorted_results)
   result = result.reset_index(drop=True)

@@ -1,5 +1,5 @@
 {
     "search_dir": "/home/benj/Images",
-    "model": "Pretrained",
+    "model": "MobileCLIP2-S0",
     "page_size": 10
 }

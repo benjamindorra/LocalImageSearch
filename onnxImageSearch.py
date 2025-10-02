@@ -1,14 +1,14 @@
 import onnxruntime as ort
 import numpy as np
 from joblib import load
-from PIL import Image
-from config import MODEL_PATH, ENCODED_IMAGES_PATH
+from config import IMAGE_MODEL_PATH, ENCODED_IMAGES_PATH
+from VLMEncoder.mobileclip_image_transforms import load_image
 
 def main():
     """Prepare the encoded images file and test a search"""
     import os
     # Parameters
-    model_path = MODEL_PATH
+    model_path = IMAGE_MODEL_PATH
     images_dir = "images"
     images_names = os.listdir(images_dir)
     images_index = [image_name.split(".")[0] for image_name in images_names]
@@ -56,16 +56,7 @@ def cos_sim(vector1, vector2):
     prod = np.dot(vector1, vector2)
     epsilon = 1e-8
     cos = prod/(v1_norm*v2_norm+epsilon)
-    return cos 
-
-
-def load_image(image_path):
-    image = Image.open(image_path)
-    image = image.resize((224,224))
-    # Remove alpha channel if there is one
-    image = image.convert('RGB')
-    return np.array(image).transpose(2,0,1)
-
+    return cos
 
 #https://github.com/onnx/onnx-docker/blob/master/onnx-ecosystem/inference_demos/resnet50_modelzoo_onnxruntime_inference.ipynb
 def normalize(input_data):

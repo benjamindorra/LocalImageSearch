@@ -3,32 +3,49 @@
 import PyQt6.QtCore as qtc
 from PyQt6.QtGui import QPalette, QPixmap, QDrag
 import PyQt6.QtWidgets as qtw
-from dbSearch import get_imgs, searchImg, getFromTo, getNumChunks
+from dbSearch import get_imgs, searchImg, searchText, getFromTo, getNumChunks
 import dbIndex
 import traceback
 import sys
 import os
 import pandas as pd
-from config import ENCODED_IMAGES_PATH, MODEL_PATH, PRETRAINED_ENCODED_IMAGES_PATH, PRETRAINED_MODEL_PATH
+from config import TEXT_MODEL_PATH, IMAGE_MODEL_PATH, ENCODED_IMAGES_PATH
 from config import INDEXING_DIR, MATCHING_FILE
 from config import SETTINGS_PATH
 import json
 from PIL import Image
 
-def get_df_embpath(model_path, imgs_dir_path):
+def get_df_embpath(model_path, imgs_dir_path, required=["matches"]):
   matching_file = os.path.join(os.path.dirname(model_path), MATCHING_FILE)
-  matching_df = pd.read_csv(matching_file)
+  if not os.path.exists(matching_file):
+    matching_dir = os.path.dirname(matching_file)
+    if not os.path.exists(matching_dir):
+      os.mkdir(matching_dir)
+    matching_df = pd.DataFrame({"images":[],"embeddings":[],"infos":[]})
+    matching_df.to_csv(matching_file, index=False)
+  else:
+    matching_df = pd.read_csv(matching_file)
+
   imgs_dir_row = matching_df[matching_df["images"]==imgs_dir_path]
-  infos_path = imgs_dir_row["infos"].values[0]
-  embeddings_path = imgs_dir_row["embeddings"].values[0]
-  df = pd.read_csv(infos_path)
-  return df, embeddings_path
+  return_values = []
+  for rq in required: 
+    if rq=="matches":
+      return_values.append(matching_df)
+    if rq=="infos":
+      imgs_dir_row = matching_df[matching_df["images"]==imgs_dir_path]
+      infos_path = imgs_dir_row["infos"].values[0]
+      return_values.append(pd.read_csv(infos_path))
+    if rq=="embeddings":
+      embeddings_path = imgs_dir_row["embeddings"].values[0]
+      return_values.append(embeddings_path)
+  if len(return_values)==1:
+    return_values = return_values[0]
+  else:
+    return_values = tuple(return_values)
+  return return_values
 
 def get_model_path():
-  if modelChoice.currentText() == 'Pretrained':
-    model_path = PRETRAINED_MODEL_PATH
-  else:
-    model_path = MODEL_PATH
+  model_path = IMAGE_MODEL_PATH
   return model_path
 
 
@@ -59,7 +76,6 @@ class Search:
 
   def getNumPages(self):
     return getNumChunks(self.values, self.pageSize.value())
-
 
 #https://stackoverflow.com/questions/50232639/drag-and-drop-qlabels-with-pyqt5
 #https://stackoverflow.com/questions/64252654/pyqt5-drag-and-drop-into-system-file-explorer-with-delayed-encoding
@@ -303,6 +319,36 @@ class ImSearchWorker(qtc.QRunnable):
     finally:
       self.signals.finished.emit(self.kwargs['tid'])  # Done
 
+#Text search worker
+class TextSearchWorker(qtc.QRunnable):
+  '''
+  Worker thread
+  '''
+  def __init__(self, *args, **kwargs):
+    super(TextSearchWorker, self).__init__()
+    self.args = args
+    self.kwargs = kwargs
+    self.signals = ImSearchWorkerSignals()
+
+  @qtc.pyqtSlot()
+  def run(self):
+    '''
+    Your code goes in this function
+    '''
+    try:
+      returnValue = searchText(*self.args,
+                              signal=self.signals.updateBar,tid=self.kwargs['tid'])
+    except:
+      traceback.print_exc()
+      exctype, value = sys.exc_info()[:2]
+      self.signals.error.emit((exctype, value, traceback.format_exc()))
+    else:
+      self.signals.result.emit(returnValue)  # Return the result of the processing
+    finally:
+      self.signals.finished.emit(self.kwargs['tid'])  # Done
+
+
+
 #Zone for drag and drop
 class DragDrop(qtw.QFrame):
   def __init__(self, modelChoice, pageSize, parent=None):
@@ -325,6 +371,8 @@ class DragDrop(qtw.QFrame):
 
     #Keep subwindows in scope
     self.subWindows = []
+
+    self.indexer = None
 
 
   def dragEnterEvent(self,event):
@@ -363,17 +411,15 @@ class DragDrop(qtw.QFrame):
     imgDir = dirChoice.pathBar.text()
     _,self.imgNames,self.imgPaths = get_imgs(imgDir)
     self.numImages = len(self.imgNames)-1
-    if self.modelChoice.currentText() == 'Pretrained':
-        model_path = PRETRAINED_MODEL_PATH
-    else:
-        model_path = MODEL_PATH
+    model_path = IMAGE_MODEL_PATH
 
     files = [u.toLocalFile() for u in event.mimeData().urls()]
 
-    matching_file = os.path.join(os.path.dirname(model_path), MATCHING_FILE)
-    matching_df = pd.read_csv(matching_file)
+    imgs_dir_path = dirChoice.pathBar.text()
 
-    if not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any():
+    matching_df = get_df_embpath(model_path, imgs_dir_path)
+
+    if matching_df["images"].empty or not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any():
       reply = qtw.QMessageBox.question(self, 'No index', 'No index for this directory, do you want to index it (this may take a while) ?',
       qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No, qtw.QMessageBox.StandardButton.No)
       if reply == qtw.QMessageBox.StandardButton.No:
@@ -381,13 +427,25 @@ class DragDrop(qtw.QFrame):
       if reply == qtw.QMessageBox.StandardButton.Yes:
         self.indexer = Index(images_dir=dirChoice.pathBar.text(), encoder_path=model_path, parent=window)
         self.indexer()
+    
+    # Start a search as soon as the indexing thread finishes, if needed
+    self.image_model_path = model_path
+    self.event = event
+    self.files = files
+    if self.indexer is not None:
+      self.indexer.worker.signals.finished.connect(self.img_search)
     else:
-        self.img_search(model_path, event, files)
+      self.img_search()
 
 
-  def img_search(self, model_path, event, files):
+  def img_search(self):
+    # Avoid waiting on a nonexisting signal after the 1st indexing
+    self.indexer = None
+    model_path = self.image_model_path
+    event = self.event
+    files = self.files
     imgs_dir_path = dirChoice.pathBar.text()
-    self.df, embeddings_path = get_df_embpath(get_model_path(), imgs_dir_path)
+    self.df, embeddings_path = get_df_embpath(get_model_path(), imgs_dir_path, ["infos", "embeddings"])
 
     for f in files:
       #Progress bar
@@ -406,30 +464,107 @@ class DragDrop(qtw.QFrame):
       worker.signals.updateBar.connect(self.updateBar)
       #Start process
       self.threadPool.start(worker)
+
     event.accept()
 
 #Search bar
-class searchBar(qtw.QLineEdit):
-  def __init__(self,languageChoice,catChoice,pageSize,parent=None,placeholderText=None):
-    super(searchBar,self).__init__(parent)
+class SearchBar(qtw.QLineEdit):
+  def __init__(self,pageSize,parent=None,placeholderText=None):
+    super(SearchBar,self).__init__(parent)
     self.setPlaceholderText(placeholderText)
-    self.setToolTip("term to search (no regex)")
+    self.setToolTip("Search query")
     self.returnPressed.connect(self.startSearch)
-    self.catChoice = catChoice
     self.pageSize = pageSize
-    imgDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
-    self.imgDir,_,_ = get_imgs(imgDir)
     self.subWindows = []
+    #Thread setup
+    self.threadPool = qtc.QThreadPool()
+    self.progressBars = []
+    self.indexer = None
 
+  """
   def startSearch(self):
-    searchModule = Search(languageChoice, catChoice, pageSize)
+    searchModule = Search(pageSize)
     searchModule.textSearch(self.text())
+    self.subWindows.append(customSubWindow(self,len(self.subWindows),searchModule))
+    self.subWindows[-1].start()
+  """
+
+  def delSubWindow(self,wid):
+    self.subWindows[wid].deleteLater()
+    self.subWindows[wid]=None
+
+  def showOutput(self,result):
+    searchModule = Search(self.pageSize)
+    searchModule.imageSearch(result)
     self.subWindows.append(customSubWindow(self,len(self.subWindows),searchModule))
     self.subWindows[-1].start()
 
   def delSubWindow(self,wid):
     self.subWindows[wid].deleteLater()
     self.subWindows[wid]=None
+
+  def threadComplete(self,tid):
+    #Remove progress bar for completed process
+    #https://stackoverflow.com/questions/5899826/pyqt-how-to-remove-a-widget
+    self.parent().layout().removeWidget(self.progressBars[tid])
+    self.progressBars[tid].deleteLater()
+    self.progressBars[tid] = None
+
+  def updateBar(self,tid):
+    self.progressBars[tid].setValue(self.progressBars[tid].value()+1)
+
+  def startSearch(self):
+    self.setStyleSheet("background-color: grey;")
+    imgDir = dirChoice.pathBar.text()
+    _,self.imgNames,self.imgPaths = get_imgs(imgDir)
+    self.numImages = len(self.imgNames)-1
+    text_model_path = TEXT_MODEL_PATH
+    image_model_path = IMAGE_MODEL_PATH
+    imgs_dir_path = dirChoice.pathBar.text()
+
+    matching_df = get_df_embpath(image_model_path, imgs_dir_path)
+
+    if matching_df["images"].empty or not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any():
+      reply = qtw.QMessageBox.question(self, 'No index', 'No index for this directory, do you want to index it (this may take a while) ?',
+      qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No, qtw.QMessageBox.StandardButton.No)
+      if reply == qtw.QMessageBox.StandardButton.No:
+        return
+      if reply == qtw.QMessageBox.StandardButton.Yes:
+        self.indexer = Index(images_dir=dirChoice.pathBar.text(), encoder_path=image_model_path, parent=window)
+        self.indexer()
+    
+    # Start a search as soon as the indexing finishes, if needed
+    self.text_model_path = text_model_path
+    if self.indexer is not None:
+        self.indexer.worker.signals.finished.connect(self.text_search)
+    else:
+        self.text_search()
+
+
+  def text_search(self):
+    # Avoid waiting on a nonexisting signal after the 1st indexing
+    self.indexer = None
+    model_path = self.text_model_path
+    imgs_dir_path = dirChoice.pathBar.text()
+    self.df, embeddings_path = get_df_embpath(get_model_path(), imgs_dir_path, ["infos", "embeddings"])
+
+    #Progress bar
+    self.progressBars.append(qtw.QProgressBar(self.parent()))
+    self.progressBars[-1].setMinimum(0)
+    self.progressBars[-1].setMaximum(self.numImages)
+    self.progressBars[-1].setToolTip('Progress bar for image search')
+    self.parent().layout().addWidget(self.progressBars[-1])
+
+    #start search
+    tid = len(self.progressBars)-1
+    worker = TextSearchWorker(self.text(),self.df,model_path,embeddings_path,tid=tid)
+    #Account for signals
+    worker.signals.finished.connect(self.threadComplete)
+    worker.signals.result.connect(self.showOutput)
+    worker.signals.updateBar.connect(self.updateBar)
+    #Start process
+    self.threadPool.start(worker)
+
 
 #Signals to manage multiprocess
 #https://www.pythonguis.com/tutorials/multithreading-pyqt-applications-qthreadpool/
@@ -498,16 +633,15 @@ class Index():
     self.progressBar.setMaximum(self.num_images)
     self.progressBar.setToolTip('Progress bar for directory indexing')
     self.parent.layout().addWidget(self.progressBar)
+    self.worker = IndexingWorker(self.images_dir,self.encoder_path)
     
   def __call__(self):
-    #start indexing
-    worker = IndexingWorker(self.images_dir,self.encoder_path)
     #Account for signals
-    worker.signals.finished.connect(self.threadComplete)
+    self.worker.signals.finished.connect(self.threadComplete)
     #worker.signals.result.connect(self.showOutput)
-    worker.signals.updateBar.connect(self.updateBar)
+    self.worker.signals.updateBar.connect(self.updateBar)
     #Start process
-    self.threadPool.start(worker)
+    self.threadPool.start(self.worker)
 
   def threadComplete(self):
     #Remove progress bar for completed process
@@ -590,13 +724,14 @@ catOptions = ['All','Index', 'Registration numbers of object', 'Identifier', 'Au
        'Technique', 'Dimensions', 'Acquisition method', 'Item name',
        'Date of origin', 'Place of origin', 'Date of birth']
 modelChoice = qtw.QComboBox(window)
-modelChoice.addItems(['Pretrained', 'Finetuned'])
+modelChoice.addItems(['MobileCLIP2-S0'])
 modelChoice.setToolTip('Model for reverse image search')
 modelChoice.setCurrentIndex(modelChoice.findText(settings["model"]))
 pageSize = qtw.QSpinBox(window)
 pageSize.setValue(settings["page_size"])
 pageSize.setToolTip("Number of images on each page")
 dragDrop = DragDrop(modelChoice, pageSize,window)
+queryBox = SearchBar(pageSize,window,placeholderText='Enter query')
 
 #Place widgets
 window.resize(450,500)
@@ -605,6 +740,7 @@ layoutLine0.addWidget(dirChoice.pathBar)
 layoutLine0.addWidget(dirChoice.reindexButton)
 layoutLine1.addWidget(modelChoice)
 layoutLine1.addWidget(pageSize)
+layoutLine2.addWidget(queryBox)
 layoutLine3.addWidget(dragDrop)
 window.show()
 app.exec()
