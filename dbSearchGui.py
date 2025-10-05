@@ -14,6 +14,7 @@ from config import INDEXING_DIR, MATCHING_FILE
 from config import SETTINGS_PATH
 import json
 from PIL import Image
+from distanceFunctions import cos_dist, euclidean_dist, manhattan_dist, chebyshev_dist, jaccard_dist
 
 def get_df_embpath(model_path, imgs_dir_path, required=["matches"]):
   matching_file = os.path.join(os.path.dirname(model_path), MATCHING_FILE)
@@ -210,7 +211,7 @@ class customSubWindow(qtw.QWidget):
     self.caller.delSubWindow(self.wid)
     #Save settings
     settings["search_dir"] = dirChoice.pathBar.text()
-    settings["model"] = modelChoice.currentText()
+    settings["dist"] = distChoice.currentText()
     settings["page_size"] = pageSize.value() 
     with open(SETTINGS_PATH, "w") as f:
       json.dump(settings, f, indent=4)
@@ -269,7 +270,7 @@ class customSubWindow(qtw.QWidget):
 
 #Signals to manage multiprocess
 #https://www.pythonguis.com/tutorials/multithreading-pyqt-applications-qthreadpool/
-class ImSearchWorkerSignals(qtc.QObject):
+class SearchWorkerSignals(qtc.QObject):
     '''
     Defines the signals available from a running worker thread.
 
@@ -300,7 +301,7 @@ class ImSearchWorker(qtc.QRunnable):
     super(ImSearchWorker, self).__init__()
     self.args = args
     self.kwargs = kwargs
-    self.signals = ImSearchWorkerSignals()
+    self.signals = SearchWorkerSignals()
 
   @qtc.pyqtSlot()
   def run(self):
@@ -328,7 +329,7 @@ class TextSearchWorker(qtc.QRunnable):
     super(TextSearchWorker, self).__init__()
     self.args = args
     self.kwargs = kwargs
-    self.signals = ImSearchWorkerSignals()
+    self.signals = SearchWorkerSignals()
 
   @qtc.pyqtSlot()
   def run(self):
@@ -351,7 +352,7 @@ class TextSearchWorker(qtc.QRunnable):
 
 #Zone for drag and drop
 class DragDrop(qtw.QFrame):
-  def __init__(self, modelChoice, pageSize, parent=None):
+  def __init__(self, distChoice, pageSize, parent=None):
     super(DragDrop,self).__init__(parent)
 
     #Text zone setup
@@ -362,7 +363,7 @@ class DragDrop(qtw.QFrame):
     )
 
     #Get parameters
-    self.modelChoice = modelChoice
+    self.distChoice = distChoice
     self.pageSize = pageSize
     
     #Thread setup
@@ -445,6 +446,7 @@ class DragDrop(qtw.QFrame):
     event = self.event
     files = self.files
     imgs_dir_path = dirChoice.pathBar.text()
+    dist = distChoice.currentText()
     self.df, embeddings_path = get_df_embpath(get_model_path(), imgs_dir_path, ["infos", "embeddings"])
 
     for f in files:
@@ -457,7 +459,7 @@ class DragDrop(qtw.QFrame):
 
       #start search
       tid = len(self.progressBars)-1
-      worker = ImSearchWorker(f,self.df,model_path,embeddings_path,tid=tid)
+      worker = ImSearchWorker(f,self.df,model_path,embeddings_path,dist,tid=tid)
       #Account for signals
       worker.signals.finished.connect(self.threadComplete)
       worker.signals.result.connect(self.showOutput)
@@ -554,10 +556,11 @@ class SearchBar(qtw.QLineEdit):
     self.progressBars[-1].setMaximum(self.numImages)
     self.progressBars[-1].setToolTip('Progress bar for image search')
     self.parent().layout().addWidget(self.progressBars[-1])
+    dist = distChoice.currentText()
 
     #start search
     tid = len(self.progressBars)-1
-    worker = TextSearchWorker(self.text(),self.df,model_path,embeddings_path,tid=tid)
+    worker = TextSearchWorker(self.text(),self.df,model_path,embeddings_path,dist,tid=tid)
     #Account for signals
     worker.signals.finished.connect(self.threadComplete)
     worker.signals.result.connect(self.showOutput)
@@ -673,20 +676,17 @@ class DirChoice(qtw.QFileDialog):
     self.pathBar.setText(path)
     #Save settings
     settings["search_dir"] = self.pathBar.text()
-    settings["model"] = modelChoice.currentText()
-    settings["page_size"] = pageSize.value() 
+    settings["dist"] = distChoice.currentText()
+    settings["page_size"] = pageSize.value()
     with open(SETTINGS_PATH, "w") as f:
       json.dump(settings, f, indent=4)
 
     return self.pathBar.text()
 
   def reindex(self):
-    if modelChoice.currentText() == 'Pretrained':
-        model_path = PRETRAINED_MODEL_PATH
-    else:
-        model_path = MODEL_PATH
-    matching_file = os.path.join(os.path.dirname(model_path), MATCHING_FILE)
-    matching_df = pd.read_csv(matching_file)
+    model_path = IMAGE_MODEL_PATH
+    imgs_dir_path = dirChoice.pathBar.text()
+    matching_df = get_df_embpath(model_path, imgs_dir_path, required=["matches"])
     execute_reindex = True
     if matching_df["images"].str.fullmatch(self.pathBar.text()).any():
       reply = qtw.QMessageBox.question(self, 'Reindex', 'An index is already defined for this directory, are you sure you want to reindex (this may take a while) ?',
@@ -723,14 +723,14 @@ dirChoice = DirChoice(window)
 catOptions = ['All','Index', 'Registration numbers of object', 'Identifier', 'Author', 'Material',
        'Technique', 'Dimensions', 'Acquisition method', 'Item name',
        'Date of origin', 'Place of origin', 'Date of birth']
-modelChoice = qtw.QComboBox(window)
-modelChoice.addItems(['MobileCLIP2-S0'])
-modelChoice.setToolTip('Model for reverse image search')
-modelChoice.setCurrentIndex(modelChoice.findText(settings["model"]))
+distChoice = qtw.QComboBox(window)
+distChoice.addItems(['Cosine','Euclidean','Manhattan','Chebyshev','Jaccard'])
+distChoice.setToolTip('Distance used for similarity search')
+distChoice.setCurrentIndex(distChoice.findText(settings["dist"]))
 pageSize = qtw.QSpinBox(window)
 pageSize.setValue(settings["page_size"])
 pageSize.setToolTip("Number of images on each page")
-dragDrop = DragDrop(modelChoice, pageSize,window)
+dragDrop = DragDrop(distChoice, pageSize, window)
 queryBox = SearchBar(pageSize,window,placeholderText='Enter query')
 
 #Place widgets
@@ -738,7 +738,7 @@ window.resize(450,500)
 layoutLine0.addWidget(dirChoice.dialogButton)
 layoutLine0.addWidget(dirChoice.pathBar)
 layoutLine0.addWidget(dirChoice.reindexButton)
-layoutLine1.addWidget(modelChoice)
+layoutLine1.addWidget(distChoice)
 layoutLine1.addWidget(pageSize)
 layoutLine2.addWidget(queryBox)
 layoutLine3.addWidget(dragDrop)

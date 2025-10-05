@@ -13,6 +13,8 @@ import unicodedata
 import onnxImageSearch as imsearch
 from VLMEncoder.openclip_tokenizer import encode_text
 from VLMEncoder.mobileclip_image_transforms import load_image, encode_image
+from distanceFunctions import cos_dist, euclidean_dist, manhattan_dist, chebyshev_dist, jaccard_dist
+dist_dict = {'Cosine':cos_dist, 'Euclidean':euclidean_dist, 'Manhattan':manhattan_dist, 'Chebyshev':chebyshev_dist, 'Jaccard':jaccard_dist}
 
 def get_imgs(imgDir):
   #imgDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
@@ -30,7 +32,9 @@ def formatResults(result,imgDir):
 
   return result_list
 
-def searchImg(input_image_path,df,model_path,encoded_images_path,signal=None,tid=None):
+def searchImg(input_image_path,df,model_path,encoded_images_path,dist,signal=None,tid=None):
+  # Select distance function for the similarity search
+  dist_func = dist_dict[dist]
   # Load all images encoding
   encoding_dict = load(encoded_images_path)
   
@@ -44,9 +48,9 @@ def searchImg(input_image_path,df,model_path,encoded_images_path,signal=None,tid
   # Get similarity to the whole dataset
   n_images = len(encoding_dict.keys())
   images_index = list(encoding_dict.keys())
-  cos_values = np.zeros(n_images)
+  dist_values = np.zeros(n_images)
   for i, image_encoding in enumerate(encoding_dict.values()):
-    cos_values[i] = imsearch.cos_sim(input_image_encoding, image_encoding)
+    dist_values[i] = dist_func(input_image_encoding, image_encoding)
     if signal != None:
         signal.emit(tid)
     else:
@@ -55,14 +59,16 @@ def searchImg(input_image_path,df,model_path,encoded_images_path,signal=None,tid
   # Sort dataframe by decreasing order of similarity
   returnValue = []
   title = 'Results for image '+str(input_image_path)
-  sorted_results = np.argsort(cos_values)[::-1]
+  sorted_results = np.argsort(dist_values)
   result = df.reindex(sorted_results)
   result = result.reset_index(drop=True)
   returnValue.append([title, result])
 
   return returnValue
 
-def searchText(input_text,df,model_path,encoded_images_path,signal=None,tid=None):
+def searchText(input_text,df,model_path,encoded_images_path,dist,signal=None,tid=None):
+  # Select distance function for the similarity search
+  dist_func = dist_dict[dist]
   # Load all images encoding
   encoding_dict = load(encoded_images_path)
 
@@ -75,9 +81,9 @@ def searchText(input_text,df,model_path,encoded_images_path,signal=None,tid=None
   # Get similarity to the whole dataset
   n_images = len(encoding_dict.keys())
   images_index = list(encoding_dict.keys())
-  cos_values = np.zeros(n_images)
+  dist_values = np.zeros(n_images)
   for i, image_encoding in enumerate(encoding_dict.values()):
-    cos_values[i] = imsearch.cos_sim(input_text_encoding, image_encoding)
+    dist_values[i] = dist_func(input_text_encoding, image_encoding)
     if signal != None:
         signal.emit(tid)
     else:
@@ -86,7 +92,7 @@ def searchText(input_text,df,model_path,encoded_images_path,signal=None,tid=None
   # Sort dataframe by decreasing order of similarity
   returnValue = []
   title = 'Results for query '+str(input_text)
-  sorted_results = np.argsort(cos_values)[::-1]
+  sorted_results = np.argsort(dist_values)
   result = df.reindex(sorted_results)
   result = result.reset_index(drop=True)
   returnValue.append([title, result])
