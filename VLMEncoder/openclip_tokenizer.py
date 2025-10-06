@@ -1,7 +1,7 @@
 """
-Copyright (c) 2012-2021 Gabriel Ilharco, Mitchell Wortsman, 
-Nicholas Carlini, Rohan Taori, Achal Dave, Vaishaal Shankar, 
-John Miller, Hongseok Namkoong, Hannaneh Hajishirzi, Ali Farhadi, 
+Copyright (c) 2012-2021 Gabriel Ilharco, Mitchell Wortsman,
+Nicholas Carlini, Rohan Taori, Achal Dave, Vaishaal Shankar,
+John Miller, Hongseok Namkoong, Hannaneh Hajishirzi, Ali Farhadi,
 Ludwig Schmidt
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -28,21 +28,24 @@ Modified from https://github.com/mlfoundations/open_clip
 """
 
 import gzip
-import regex as re
 import html
-import ftfy
-from typing import Callable, List, Optional, Union, Dict
-import string
-import numpy as np
-from functools import lru_cache
 import os
+import string
+from functools import lru_cache
+from typing import Callable, Dict, List, Optional, Union
+
+import ftfy
+import numpy as np
+import regex as re
+
 
 def encode_text(session, text):
     tokenizer = SimpleTokenizer()
-    text = tokenizer(text) 
+    text = tokenizer(text)
     input_name = session.get_inputs()[0].name
     encoding = session.run(None, {input_name: text})
     return encoding
+
 
 @lru_cache()
 def bytes_to_unicode():
@@ -55,13 +58,17 @@ def bytes_to_unicode():
     To avoid that, we want lookup tables between utf-8 bytes and unicode strings.
     And avoids mapping to whitespace/control characters the bpe code barfs on.
     """
-    bs = list(range(ord("!"), ord("~")+1))+list(range(ord("¡"), ord("¬")+1))+list(range(ord("®"), ord("ÿ")+1))
+    bs = (
+        list(range(ord("!"), ord("~") + 1))
+        + list(range(ord("¡"), ord("¬") + 1))
+        + list(range(ord("®"), ord("ÿ") + 1))
+    )
     cs = bs[:]
     n = 0
     for b in range(2**8):
         if b not in bs:
             bs.append(b)
-            cs.append(2**8+n)
+            cs.append(2**8 + n)
             n += 1
     cs = [chr(n) for n in cs]
     return dict(zip(bs, cs))
@@ -77,6 +84,7 @@ def get_pairs(word):
         pairs.add((prev_char, char))
         prev_char = char
     return pairs
+
 
 def canonicalize_text(
     text,
@@ -106,6 +114,7 @@ def canonicalize_text(
     text = " ".join(text.split())
     return text.strip()
 
+
 def basic_clean(text):
     text = ftfy.fix_text(text)
     text = html.unescape(html.unescape(text))
@@ -132,44 +141,46 @@ def _clean_whitespace(x):
     # basic, remove whitespace
     return whitespace_clean(basic_clean(x))
 
+
 def get_clean_fn(type: str):
-    if type == 'canonicalize':
+    if type == "canonicalize":
         return _clean_canonicalize
-    elif type == 'lower':
+    elif type == "lower":
         return _clean_lower
-    elif type == 'whitespace':
+    elif type == "whitespace":
         return _clean_whitespace
     else:
         assert False, f"Invalid clean function ({type})."
 
+
 class SimpleTokenizer(object):
     def __init__(
-            self,
-            bpe_name: str = "bpe_simple_vocab_16e6.txt.gz",
-            additional_special_tokens: Optional[List[str]] = None,
-            context_length: Optional[int] = 77,
-            clean: str = 'lower',
-            reduction_mask: str = ''
+        self,
+        bpe_name: str = "bpe_simple_vocab_16e6.txt.gz",
+        additional_special_tokens: Optional[List[str]] = None,
+        context_length: Optional[int] = 77,
+        clean: str = "lower",
+        reduction_mask: str = "",
     ):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
         dir = os.path.dirname(os.path.abspath(__file__))
         bpe_path = os.path.join(dir, bpe_name)
-        merges = gzip.open(bpe_path).read().decode("utf-8").split('\n')
-        merges = merges[1:49152-256-2+1]
+        merges = gzip.open(bpe_path).read().decode("utf-8").split("\n")
+        merges = merges[1 : 49152 - 256 - 2 + 1]
         merges = [tuple(merge.split()) for merge in merges]
         vocab = list(bytes_to_unicode().values())
-        vocab = vocab + [v+'</w>' for v in vocab]
+        vocab = vocab + [v + "</w>" for v in vocab]
         for merge in merges:
-            vocab.append(''.join(merge))
-        special_tokens = ['<start_of_text>', '<end_of_text>']
+            vocab.append("".join(merge))
+        special_tokens = ["<start_of_text>", "<end_of_text>"]
         if additional_special_tokens:
             special_tokens += additional_special_tokens
         vocab.extend(special_tokens)
         self.encoder = dict(zip(vocab, range(len(vocab))))
         self.decoder = {v: k for k, v in self.encoder.items()}
         self.bpe_ranks = dict(zip(merges, range(len(merges))))
-        self.cache = {t:t for t in special_tokens}
+        self.cache = {t: t for t in special_tokens}
         special = "|".join(special_tokens)
         self.pat = re.compile(
             special + r"""|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+""",
@@ -181,19 +192,21 @@ class SimpleTokenizer(object):
         self.eot_token_id = self.all_special_ids[1]
         self.context_length = context_length
         self.clean_fn = get_clean_fn(clean)
-        self.reduction_fn = get_reduction_mask_fn(reduction_mask) if reduction_mask else None
+        self.reduction_fn = (
+            get_reduction_mask_fn(reduction_mask) if reduction_mask else None
+        )
 
     def bpe(self, token):
         if token in self.cache:
             return self.cache[token]
-        word = tuple(token[:-1]) + ( token[-1] + '</w>',)
+        word = tuple(token[:-1]) + (token[-1] + "</w>",)
         pairs = get_pairs(word)
 
         if not pairs:
-            return token+'</w>'
+            return token + "</w>"
 
         while True:
-            bigram = min(pairs, key = lambda pair: self.bpe_ranks.get(pair, float('inf')))
+            bigram = min(pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf")))
             if bigram not in self.bpe_ranks:
                 break
             first, second = bigram
@@ -208,8 +221,8 @@ class SimpleTokenizer(object):
                     new_word.extend(word[i:])
                     break
 
-                if word[i] == first and i < len(word)-1 and word[i+1] == second:
-                    new_word.append(first+second)
+                if word[i] == first and i < len(word) - 1 and word[i + 1] == second:
+                    new_word.append(first + second)
                     i += 2
                 else:
                     new_word.append(word[i])
@@ -220,7 +233,7 @@ class SimpleTokenizer(object):
                 break
             else:
                 pairs = get_pairs(word)
-        word = ' '.join(word)
+        word = " ".join(word)
         self.cache[token] = word
         return word
 
@@ -228,17 +241,25 @@ class SimpleTokenizer(object):
         bpe_tokens = []
         text = self.clean_fn(text)
         for token in re.findall(self.pat, text):
-            token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
-            bpe_tokens.extend(self.encoder[bpe_token] for bpe_token in self.bpe(token).split(' '))
+            token = "".join(self.byte_encoder[b] for b in token.encode("utf-8"))
+            bpe_tokens.extend(
+                self.encoder[bpe_token] for bpe_token in self.bpe(token).split(" ")
+            )
         return bpe_tokens
 
     def decode(self, tokens):
-        text = ''.join([self.decoder[token] for token in tokens])
-        text = bytearray([self.byte_decoder[c] for c in text]).decode('utf-8', errors="replace").replace('</w>', ' ')
+        text = "".join([self.decoder[token] for token in tokens])
+        text = (
+            bytearray([self.byte_decoder[c] for c in text])
+            .decode("utf-8", errors="replace")
+            .replace("</w>", " ")
+        )
         return text
 
-    def __call__(self, texts: Union[str, List[str]], context_length: Optional[int] = None) -> np.array:
-        """ Returns the tokenized representation of given input string(s)
+    def __call__(
+        self, texts: Union[str, List[str]], context_length: Optional[int] = None
+    ) -> np.array:
+        """Returns the tokenized representation of given input string(s)
 
         Parameters
         ----------
@@ -255,7 +276,7 @@ class SimpleTokenizer(object):
             texts = [texts]
 
         context_length = context_length or self.context_length
-        assert context_length, 'Please set a valid context length'
+        assert context_length, "Please set a valid context length"
 
         if self.reduction_fn is not None:
             # use reduction strategy for tokenize if set, otherwise default to truncation below
@@ -267,13 +288,16 @@ class SimpleTokenizer(object):
                 encode_fn=self.encode,
             )
 
-        all_tokens = [[self.sot_token_id] + self.encode(text) + [self.eot_token_id] for text in texts]
+        all_tokens = [
+            [self.sot_token_id] + self.encode(text) + [self.eot_token_id]
+            for text in texts
+        ]
         result = np.zeros((len(all_tokens), context_length), dtype=np.long)
 
         for i, tokens in enumerate(all_tokens):
             if len(tokens) > context_length:
                 tokens = tokens[:context_length]  # Truncate
                 tokens[-1] = self.eot_token_id
-            result[i, :len(tokens)] = np.array(tokens)
+            result[i, : len(tokens)] = np.array(tokens)
 
         return result

@@ -22,24 +22,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from openclip_tokenizer import SimpleTokenizer
-from mobileclip_image_transforms import load_image, encode
-import onnxruntime as ort
 import numpy as np
+import onnxruntime as ort
+from mobileclip_image_transforms import encode, load_image
+from openclip_tokenizer import SimpleTokenizer
 from scipy.special import softmax
 
 image = load_image("c1bd6e30409ac7208a62a8acc1b9d466.jpg")
 tokenizer = SimpleTokenizer()
 raw_text = ["lizard", "pigeon", "cat", "penguin"]
-#raw_text = ["penguin"]
+# raw_text = ["penguin"]
 texts = [tokenizer(w) for w in raw_text]
 
-#text_model_path = "mobileclip2_s0_text_encoder.onnx"
-#image_model_path = "mobileclip2_s0_image_encoder.onnx"
+# text_model_path = "mobileclip2_s0_text_encoder.onnx"
+# image_model_path = "mobileclip2_s0_image_encoder.onnx"
 text_model_path = "mobileclip2_s0_text_encoder.onnx"
 image_model_path = "mobileclip2_s0_image_encoder.onnx"
 
-#https://www.codeproject.com/Articles/5278507/Using-Portable-ONNX-AI-Models-in-Python
+
+# https://www.codeproject.com/Articles/5278507/Using-Portable-ONNX-AI-Models-in-Python
 def load_onnx_model(model_path):
     session = ort.InferenceSession(model_path)
     return session
@@ -48,7 +49,7 @@ def load_onnx_model(model_path):
 text_session = load_onnx_model(text_model_path)
 image_session = load_onnx_model(image_model_path)
 
-image_encoding = encode(image_session,image)
+image_encoding = encode(image_session, image)
 input_name = text_session.get_inputs()[0].name
 text_encoding = []
 for text in texts:
@@ -62,4 +63,5 @@ image_encoding = np.squeeze(image_encoding, axis=0)
 text_encoding = np.squeeze(text_encoding, axis=0)
 text_probs = softmax((100.0 * image_encoding @ text_encoding.T), axis=-1)
 
-print("Label probs:", list(zip(raw_text, np.split(text_probs, len(raw_text), axis=-1))))
+print("Label probs:", list(
+    zip(raw_text, np.split(text_probs, len(raw_text), axis=-1))))
