@@ -27,7 +27,6 @@ def euclidean_dist(vector1, vector2):
     diff_squared = np.square(diff)
     total = np.sum(diff_squared)
     root = np.sqrt(total)
-    print(root)
     return root
 
 

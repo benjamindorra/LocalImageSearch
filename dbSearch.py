@@ -75,13 +75,7 @@ def searchImg(
     returnValue = []
     title = "Results for image " + str(input_image_path)
     sorted_results = np.argsort(dist_values)
-    print("sorted")
-    print(sorted_results)
-    print("Original")
-    print(df)
     result = df.reindex(sorted_results)
-    print("Reindexed")
-    print(result)
     result = result.reset_index(drop=True)
     returnValue.append([title, result])
 

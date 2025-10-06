@@ -34,10 +34,9 @@ def create_df(images_dir, dest):
 def create_embeddings(images_dir, dest, encoder_path, signal=None):
     """Create embeddings for the selected images directory"""
     images_names = os.listdir(images_dir)
-    images_index = [image_name.split(".")[0] for image_name in images_names]
     images_paths = [os.path.join(images_dir, image_name) for image_name in images_names]
     session = load_onnx_model(encoder_path)
-    encode_whole_dataset({}, session, dest, images_index, images_paths, signal)
+    encode_whole_dataset({}, session, dest, images_names, images_paths, signal)
 
 
 def indexDir(images_dir, encoder_path, signal=None):
