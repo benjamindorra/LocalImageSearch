@@ -21,8 +21,6 @@ def cos_dist(vector1, vector2):
 def euclidean_dist(vector1, vector2):
     vector1 = np.squeeze(vector1)
     vector2 = np.squeeze(vector2)
-    vector1 /= np.linalg.norm(vector1, axis=-1, keepdims=True)
-    vector2 /= np.linalg.norm(vector2, axis=-1, keepdims=True)
     diff = np.subtract(vector1, vector2)
     diff_squared = np.square(diff)
     total = np.sum(diff_squared)
@@ -33,8 +31,6 @@ def euclidean_dist(vector1, vector2):
 def manhattan_dist(vector1, vector2):
     vector1 = np.squeeze(vector1)
     vector2 = np.squeeze(vector2)
-    vector1 /= np.linalg.norm(vector1, axis=-1, keepdims=True)
-    vector2 /= np.linalg.norm(vector2, axis=-1, keepdims=True)
     diff = np.subtract(vector1, vector2)
     diff_abs = np.absolute(diff)
     total = np.sum(diff_abs)
@@ -44,8 +40,6 @@ def manhattan_dist(vector1, vector2):
 def chebyshev_dist(vector1, vector2):
     vector1 = np.squeeze(vector1)
     vector2 = np.squeeze(vector2)
-    vector1 /= np.linalg.norm(vector1, axis=-1, keepdims=True)
-    vector2 /= np.linalg.norm(vector2, axis=-1, keepdims=True)
     diff = np.subtract(vector1, vector2)
     diff_abs = np.absolute(diff)
     max_diff = np.max(diff_abs)
@@ -55,10 +49,12 @@ def chebyshev_dist(vector1, vector2):
 def jaccard_dist(vector1, vector2):
     vector1 = np.squeeze(vector1)
     vector2 = np.squeeze(vector2)
-    vector1 /= np.linalg.norm(vector1, axis=-1, keepdims=True)
-    vector2 /= np.linalg.norm(vector2, axis=-1, keepdims=True)
+    vector1 = np.absolute(vector1)
+    vector2 = np.absolute(vector2)
+    vector1 /= np.amax(vector1)
+    vector2 /= np.amax(vector2)
     intersection = np.sum(np.multiply(vector1, vector2))
-    union = np.sum(vector1) + np.sum(vector2) - intersection
+    union = np.absolute(np.sum(vector1) + np.sum(vector2) - intersection)
     epsilon = 1e-8
     jaccard_index = intersection / (union + epsilon)
     return 1 - jaccard_index
