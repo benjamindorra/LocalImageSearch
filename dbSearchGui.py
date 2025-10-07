@@ -404,6 +404,7 @@ class DragDrop(qtw.QFrame):
         searchModule.imageSearch(result)
         self.subWindows.append(customSubWindow(
             self, len(self.subWindows), searchModule))
+        self.subWindows[-1].setWindowTitle("Reverse image search results")
         self.subWindows[-1].start()
 
     def delSubWindow(self, wid):
@@ -508,6 +509,7 @@ class SearchBar(qtw.QLineEdit):
         searchModule.imageSearch(result)
         self.subWindows.append(customSubWindow(
             self, len(self.subWindows), searchModule))
+        self.subWindows[-1].setWindowTitle("Text to image search results")
         self.subWindows[-1].start()
 
     def delSubWindow(self, wid):
@@ -723,7 +725,7 @@ layoutLine1 = qtw.QHBoxLayout()
 layoutLine2 = qtw.QHBoxLayout()
 layoutLine3 = qtw.QHBoxLayout()
 window.setLayout(layout)
-window.setWindowTitle("Search in database")
+window.setWindowTitle("Search in local images")
 layout.addLayout(layoutLine0)
 layout.addLayout(layoutLine1)
 layout.addLayout(layoutLine2)
