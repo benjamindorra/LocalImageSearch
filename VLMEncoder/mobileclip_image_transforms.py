@@ -18,11 +18,14 @@ def load_image(image_path):
 def normalize(input_data):
     # convert the input data into the float32 input
     img_data = input_data.astype("float32")
+    # Normalize
+    norm_img_data = img_data / 255 
 
-    # normalize
-    mean_vec = np.expand_dims(np.array([0.48145466, 0.4578275, 0.40821073]), (1, 2))
-    stddev_vec = np.expand_dims(np.array([0.26862954, 0.26130258, 0.27577711]), (1, 2))
-    norm_img_data = (img_data / 255 - mean_vec) / stddev_vec
+    # Standardize
+    # Mobileclip works way better without this step, error in the repo ?
+    #mean_vec = np.expand_dims(np.array([0.48145466, 0.4578275, 0.40821073]), (1, 2))
+    #stddev_vec = np.expand_dims(np.array([0.26862954, 0.26130258, 0.27577711]), (1, 2))
+    #norm_img_data = (img_data - mean_vec) / stddev_vec
 
     # add batch channel
     norm_img_data = np.expand_dims(norm_img_data, 0).astype("float32")
