@@ -58,7 +58,7 @@ def searchImg(
 
     # Load and encode input image
     input_image = imsearch.load_image(input_image_path)
-    input_image_encoding = imsearch.encode(session, input_image)
+    input_image_encoding = encode_image(session, input_image)
 
     # Get similarity to the whole dataset
     n_images = len(encoding_dict.keys())

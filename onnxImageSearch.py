@@ -5,7 +5,7 @@ from joblib import load
 from config import ENCODED_IMAGES_PATH, IMAGE_MODEL_PATH
 from distanceFunctions import (chebyshev_dist, cos_dist, euclidean_dist,
                                jaccard_dist, manhattan_dist)
-from VLMEncoder.mobileclip_image_transforms import load_image
+from VLMEncoder.mobileclip_image_transforms import load_image, encode_image
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     # Onnx operations: use model on image
     session = load_onnx_model(model_path)
     image = load_image(image_path)
-    input_image_encoding = encode(session, image)
+    input_image_encoding = encode_image(session, image)
 
     # encode whole dataset
     encoding_dict = {}
@@ -56,28 +56,6 @@ def load_onnx_model(model_path):
     return session
 
 
-# https://github.com/onnx/onnx-docker/blob/master/onnx-ecosystem/inference_demos/resnet50_modelzoo_onnxruntime_inference.ipynb
-def normalize(input_data):
-    # convert the input data into the float32 input
-    img_data = input_data.astype("float32")
-
-    # normalize
-    mean_vec = np.expand_dims(np.array([0.485, 0.456, 0.406]), (1, 2))
-    stddev_vec = np.expand_dims(np.array([0.229, 0.224, 0.225]), (1, 2))
-    norm_img_data = (img_data / 255 - mean_vec) / stddev_vec
-
-    # add batch channel
-    norm_img_data = np.expand_dims(norm_img_data, 0).astype("float32")
-    return norm_img_data
-
-
-def encode(session, image):
-    image = normalize(image)
-    input_name = session.get_inputs()[0].name
-    encoding = session.run(None, {input_name: image})
-    return encoding
-
-
 def encode_whole_dataset(
     encoding_dict, session, encoded_images_path, images_index, images_paths, signal=None
 ):
@@ -90,7 +68,7 @@ def encode_whole_dataset(
             image = load_image(image_path)
         except:
             continue
-        image_encoding = encode(session, image)
+        image_encoding = encode_image(session, image)
         encoding_dict[image_index] = image_encoding
         if signal != None:
             signal.emit()
@@ -101,7 +79,7 @@ def encode_whole_dataset(
 
 
 def compare(encoding1, encoding2, dist):
-    return dist(encoding_1, encoding_2)
+    return dist(encoding1, encoding2)
 
 
 if __name__ == "__main__":
