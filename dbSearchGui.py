@@ -525,7 +525,6 @@ class SearchBar(qtw.QLineEdit):
         self.progressBars[tid].setValue(self.progressBars[tid].value()+1)
 
     def startSearch(self):
-        self.setStyleSheet("background-color: grey;")
         imgDir = dirChoice.pathBar.text()
         _, self.imgNames, self.imgPaths = get_imgs(imgDir)
         self.numImages = len(self.imgNames)-1
