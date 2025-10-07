@@ -60,14 +60,6 @@ class Search:
         self.imgDir = dirChoice.pathBar.text()
         self.values = result
 
-    def textSearch(self, request):
-        """Search by text and store result index"""
-        self.imgDir = dirChoice.pathBar.text()
-        self.imgDir, self.imgNames, self.imgPaths = get_imgs(self.imgDir)
-        category = self.catChoice.currentText()
-        category = None if category == 'All' else category
-        self.values = searchText(request, self.df, self.imgDir, category)
-
     def getPage(self, page):
         """Get a page to display from the db, starting from 1"""
         start = (page - 1) * self.pageSize.value()
@@ -507,14 +499,6 @@ class SearchBar(qtw.QLineEdit):
         self.image_model_path = IMAGE_MODEL_PATH
         self.text_model_path = TEXT_MODEL_PATH
 
-    """
-  def startSearch(self):
-    searchModule = Search(pageSize)
-    searchModule.textSearch(self.text())
-    self.subWindows.append(customSubWindow(self,len(self.subWindows),searchModule))
-    self.subWindows[-1].start()
-  """
-
     def delSubWindow(self, wid):
         self.subWindows[wid].deleteLater()
         self.subWindows[wid] = None
@@ -748,9 +732,6 @@ layout.addLayout(layoutLine3)
 
 # Setup widgets
 dirChoice = DirChoice(window)
-catOptions = ['All', 'Index', 'Registration numbers of object', 'Identifier', 'Author', 'Material',
-              'Technique', 'Dimensions', 'Acquisition method', 'Item name',
-              'Date of origin', 'Place of origin', 'Date of birth']
 distChoice = qtw.QComboBox(window)
 distChoice.addItems(
     ['Cosine', 'Euclidean', 'Manhattan', 'Chebyshev', 'Jaccard'])
