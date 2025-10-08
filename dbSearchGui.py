@@ -228,7 +228,8 @@ class customSubWindow(qtw.QWidget):
                 self.scrollLayout.addLayout(self.lines[-1])
                 self.infos.append(qtw.QLabel(entry[0], self))
                 self.infos[-1].setTextInteractionFlags(
-                    qtc.Qt.TextInteractionFlag.TextSelectableByMouse)
+                    qtc.Qt.TextInteractionFlag.TextSelectableByMouse
+                    | qtc.Qt.TextInteractionFlag.TextSelectableByKeyboard)
                 self.images.append(DragLabel(entry[1], self))
                 width = 512
                 self.images[-1].setPixmap(QPixmap(entry[1]
