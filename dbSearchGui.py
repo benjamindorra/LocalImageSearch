@@ -1,20 +1,34 @@
 #!/usr/local/bin/python3
 
-import PyQt6.QtCore as qtc
-from PyQt6.QtGui import QPalette, QPixmap, QDrag
-import PyQt6.QtWidgets as qtw
-from dbSearch import get_imgs, searchImg, searchText, getFromTo, getNumChunks
-import dbIndex
-import traceback
-import sys
-import os
-import pandas as pd
-from config import TEXT_MODEL_PATH, IMAGE_MODEL_PATH, ENCODED_IMAGES_PATH
-from config import INDEXING_DIR, MATCHING_FILE
-from config import SETTINGS_PATH
 import json
+import os
+import sys
+import traceback
+
+import pandas as pd
+import PyQt6.QtCore as qtc
+import PyQt6.QtWidgets as qtw
+from numpy import inf
 from PIL import Image
-from distanceFunctions import cos_dist, euclidean_dist, manhattan_dist, chebyshev_dist, jaccard_dist
+from PyQt6.QtGui import QDrag, QPalette, QPixmap
+
+import dbIndex
+from config import (
+    ENCODED_IMAGES_PATH,
+    IMAGE_MODEL_PATH,
+    INDEXING_DIR,
+    MATCHING_FILE,
+    SETTINGS_PATH,
+    TEXT_MODEL_PATH,
+)
+from dbSearch import get_imgs, getFromTo, getNumChunks, searchImg, searchText
+from distanceFunctions import (
+    chebyshev_dist,
+    cos_dist,
+    euclidean_dist,
+    jaccard_dist,
+    manhattan_dist,
+)
 
 
 def get_df_embpath(model_path, imgs_dir_path, required=["matches"]):
@@ -23,8 +37,7 @@ def get_df_embpath(model_path, imgs_dir_path, required=["matches"]):
         matching_dir = os.path.dirname(matching_file)
         if not os.path.exists(matching_dir):
             os.mkdir(matching_dir)
-        matching_df = pd.DataFrame(
-            {"images": [], "embeddings": [], "infos": []})
+        matching_df = pd.DataFrame({"images": [], "embeddings": [], "infos": []})
         matching_df.to_csv(matching_file, index=False)
     else:
         matching_df = pd.read_csv(matching_file)
@@ -69,6 +82,7 @@ class Search:
     def getNumPages(self):
         return getNumChunks(self.values, self.pageSize.value())
 
+
 # https://stackoverflow.com/questions/50232639/drag-and-drop-qlabels-with-pyqt5
 # https://stackoverflow.com/questions/64252654/pyqt5-drag-and-drop-into-system-file-explorer-with-delayed-encoding
 
@@ -85,8 +99,9 @@ class DragLabel(qtw.QLabel):
     def mouseMoveEvent(self, event):
         if event.buttons() != qtc.Qt.MouseButton.LeftButton:
             return
-        if (event.pos() - self.dragStartPos).manhattanLength()\
-                < qtw.QApplication.startDragDistance():
+        if (
+            event.pos() - self.dragStartPos
+        ).manhattanLength() < qtw.QApplication.startDragDistance():
             return
         drag = QDrag(self)
         mimedata = qtc.QMimeData()
@@ -105,18 +120,16 @@ class NavBar(qtw.QWidget):
         self.navLayout = qtw.QHBoxLayout()
         self.navPrevButton = qtw.QPushButton("Prev")
         self.navPrevButton.clicked.connect(parent.prevPage)
-        self.navPrevButton.setFixedWidth(
-            self.navPrevButton.minimumSizeHint().width())
+        self.navPrevButton.setFixedWidth(self.navPrevButton.minimumSizeHint().width())
         self.navLayout.addWidget(self.navPrevButton)
         self.navSelectPage = qtw.QLineEdit("")
         self.navSelectPage.returnPressed.connect(self.selectPage)
         self.navLayout.addWidget(self.navSelectPage)
-        self.navLabel = qtw.QLabel("/"+"")
+        self.navLabel = qtw.QLabel("/" + "")
         self.navLayout.addWidget(self.navLabel)
         self.navNextButton = qtw.QPushButton("Next")
         self.navNextButton.clicked.connect(parent.nextPage)
-        self.navNextButton.setFixedWidth(
-            self.navNextButton.minimumSizeHint().width())
+        self.navNextButton.setFixedWidth(self.navNextButton.minimumSizeHint().width())
         self.navLayout.addWidget(self.navNextButton)
         self.navLayout.setAlignment(qtc.Qt.AlignmentFlag.AlignHCenter)
 
@@ -138,14 +151,16 @@ class customSubWindow(qtw.QWidget):
         # Main widgets in scroll area
         self.scrollLayout = qtw.QVBoxLayout()
         self.scrollLayout.setSizeConstraint(
-            self.scrollLayout.SizeConstraint.SetMinAndMaxSize)
+            self.scrollLayout.SizeConstraint.SetMinAndMaxSize
+        )
         self.displayArea = qtw.QWidget(self)
         self.displayArea.setLayout(self.scrollLayout)
         # Scrolling
         self.scrollArea = qtw.QScrollArea(self)
         self.scrollArea.setWidget(self.displayArea)
         self.scrollArea.setVerticalScrollBarPolicy(
-            qtc.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+            qtc.Qt.ScrollBarPolicy.ScrollBarAlwaysOn
+        )
         self.subLayout = qtw.QVBoxLayout()
         self.subLayout.addWidget(self.scrollArea)
         self.setLayout(self.subLayout)
@@ -162,9 +177,11 @@ class customSubWindow(qtw.QWidget):
     def start(self):
         self.finalPage = self.searchModule.getNumPages()
         self.topNavBar.navSelectPage.setFixedWidth(
-            self.topNavBar.navSelectPage.minimumSizeHint().width())
+            self.topNavBar.navSelectPage.minimumSizeHint().width()
+        )
         self.botNavBar.navSelectPage.setFixedWidth(
-            self.botNavBar.navSelectPage.minimumSizeHint().width())
+            self.botNavBar.navSelectPage.minimumSizeHint().width()
+        )
         if self.finalPage > 0:
             firstPage = self.searchModule.getPage(1)
         else:
@@ -173,9 +190,11 @@ class customSubWindow(qtw.QWidget):
         self.currentPage = 1
         self.updateNavBars()
         self.topNavBar.navLabel.setFixedWidth(
-            self.topNavBar.navLabel.minimumSizeHint().width())
+            self.topNavBar.navLabel.minimumSizeHint().width()
+        )
         self.botNavBar.navLabel.setFixedWidth(
-            self.botNavBar.navLabel.minimumSizeHint().width())
+            self.botNavBar.navLabel.minimumSizeHint().width()
+        )
         self.displayResults(firstPage)
         self.show()
 
@@ -201,7 +220,7 @@ class customSubWindow(qtw.QWidget):
         self.scrollLayout.removeItem(self.botNavBar.navLayout)
 
     def closeEvent(self, event):
-        '''Redefined to close all children widgets and save settings'''
+        """Redefined to close all children widgets and save settings"""
         # Close widgets
         # https://stackoverflow.com/questions/5899826/pyqt-how-to-remove-a-widget
         self.cleanPage()
@@ -229,19 +248,19 @@ class customSubWindow(qtw.QWidget):
                 self.infos.append(qtw.QLabel(entry[0], self))
                 self.infos[-1].setTextInteractionFlags(
                     qtc.Qt.TextInteractionFlag.TextSelectableByMouse
-                    | qtc.Qt.TextInteractionFlag.TextSelectableByKeyboard)
+                    | qtc.Qt.TextInteractionFlag.TextSelectableByKeyboard
+                )
                 self.images.append(DragLabel(entry[1], self))
-                width = 512
-                self.images[-1].setPixmap(QPixmap(entry[1]
-                                                  ).scaledToWidth(width))
+                width = imageWidth.value()
+                self.images[-1].setPixmap(QPixmap(entry[1]).scaledToWidth(width))
                 self.lines[-1].addWidget(self.infos[-1])
                 self.lines[-1].addWidget(self.images[-1])
         self.scrollLayout.addLayout(self.botNavBar.navLayout)
 
     def updateNavBars(self):
         """Update displayed page number"""
-        self.topNavBar.navLabel.setText("/"+str(self.finalPage))
-        self.botNavBar.navLabel.setText("/"+str(self.finalPage))
+        self.topNavBar.navLabel.setText("/" + str(self.finalPage))
+        self.botNavBar.navLabel.setText("/" + str(self.finalPage))
         self.topNavBar.navSelectPage.setText(str(self.currentPage))
         self.botNavBar.navSelectPage.setText(str(self.currentPage))
 
@@ -273,12 +292,13 @@ class customSubWindow(qtw.QWidget):
         content = self.searchModule.getPage(self.currentPage)
         self.displayResults(content)
 
+
 # Signals to manage multiprocess
 # https://www.pythonguis.com/tutorials/multithreading-pyqt-applications-qthreadpool/
 
 
 class SearchWorkerSignals(qtc.QObject):
-    '''
+    """
     Defines the signals available from a running worker thread.
 
     Supported signals are:
@@ -292,7 +312,8 @@ class SearchWorkerSignals(qtc.QObject):
     result
         object data returned from processing, anything
 
-    '''
+    """
+
     finished = qtc.pyqtSignal(int)
     error = qtc.pyqtSignal(tuple)
     result = qtc.pyqtSignal(object)
@@ -301,9 +322,9 @@ class SearchWorkerSignals(qtc.QObject):
 
 # Image search worker
 class ImSearchWorker(qtc.QRunnable):
-    '''
+    """
     Worker thread
-    '''
+    """
 
     def __init__(self, *args, **kwargs):
         super(ImSearchWorker, self).__init__()
@@ -313,12 +334,13 @@ class ImSearchWorker(qtc.QRunnable):
 
     @qtc.pyqtSlot()
     def run(self):
-        '''
+        """
         Your code goes in this function
-        '''
+        """
         try:
-            returnValue = searchImg(*self.args,
-                                    signal=self.signals.updateBar, tid=self.kwargs['tid'])
+            returnValue = searchImg(
+                *self.args, signal=self.signals.updateBar, tid=self.kwargs["tid"]
+            )
         except:
             traceback.print_exc()
             exctype, value = sys.exc_info()[:2]
@@ -327,15 +349,16 @@ class ImSearchWorker(qtc.QRunnable):
             # Return the result of the processing
             self.signals.result.emit(returnValue)
         finally:
-            self.signals.finished.emit(self.kwargs['tid'])  # Done
+            self.signals.finished.emit(self.kwargs["tid"])  # Done
+
 
 # Text search worker
 
 
 class TextSearchWorker(qtc.QRunnable):
-    '''
+    """
     Worker thread
-    '''
+    """
 
     def __init__(self, *args, **kwargs):
         super(TextSearchWorker, self).__init__()
@@ -345,12 +368,13 @@ class TextSearchWorker(qtc.QRunnable):
 
     @qtc.pyqtSlot()
     def run(self):
-        '''
+        """
         Your code goes in this function
-        '''
+        """
         try:
-            returnValue = searchText(*self.args,
-                                     signal=self.signals.updateBar, tid=self.kwargs['tid'])
+            returnValue = searchText(
+                *self.args, signal=self.signals.updateBar, tid=self.kwargs["tid"]
+            )
         except:
             traceback.print_exc()
             exctype, value = sys.exc_info()[:2]
@@ -359,7 +383,7 @@ class TextSearchWorker(qtc.QRunnable):
             # Return the result of the processing
             self.signals.result.emit(returnValue)
         finally:
-            self.signals.finished.emit(self.kwargs['tid'])  # Done
+            self.signals.finished.emit(self.kwargs["tid"])  # Done
 
 
 # Zone for drag and drop
@@ -371,7 +395,7 @@ class DragDrop(qtw.QFrame):
         self.setAcceptDrops(True)
         self.setStyleSheet("background-color: grey;")
         self.setToolTip(
-            'Drag and drop an image to search for it (may take a few minutes)'
+            "Drag and drop an image to search for it (may take a few minutes)"
         )
 
         # Get parameters
@@ -403,8 +427,9 @@ class DragDrop(qtw.QFrame):
     def showOutput(self, result):
         searchModule = Search(self.pageSize)
         searchModule.imageSearch(result)
-        self.subWindows.append(customSubWindow(
-            self, len(self.subWindows), searchModule))
+        self.subWindows.append(
+            customSubWindow(self, len(self.subWindows), searchModule)
+        )
         self.subWindows[-1].setWindowTitle("Reverse image search results")
         self.subWindows[-1].start()
 
@@ -420,13 +445,13 @@ class DragDrop(qtw.QFrame):
         self.progressBars[tid] = None
 
     def updateBar(self, tid):
-        self.progressBars[tid].setValue(self.progressBars[tid].value()+1)
+        self.progressBars[tid].setValue(self.progressBars[tid].value() + 1)
 
     def dropEvent(self, event):
         self.setStyleSheet("background-color: grey;")
         imgDir = dirChoice.pathBar.text()
         _, self.imgNames, self.imgPaths = get_imgs(imgDir)
-        self.numImages = len(self.imgNames)-1
+        self.numImages = len(self.imgNames) - 1
 
         files = [u.toLocalFile() for u in event.mimeData().urls()]
 
@@ -434,14 +459,25 @@ class DragDrop(qtw.QFrame):
 
         matching_df = get_df_embpath(self.image_model_path, imgs_dir_path)
 
-        if matching_df["images"].empty or not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any():
-            reply = qtw.QMessageBox.question(self, 'No index', 'No index for this directory, do you want to index it (this may take a while) ?',
-                                             qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No, qtw.QMessageBox.StandardButton.No)
+        if (
+            matching_df["images"].empty
+            or not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any()
+        ):
+            reply = qtw.QMessageBox.question(
+                self,
+                "No index",
+                "No index for this directory, do you want to index it (this may take a while) ?",
+                qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No,
+                qtw.QMessageBox.StandardButton.No,
+            )
             if reply == qtw.QMessageBox.StandardButton.No:
                 return
             if reply == qtw.QMessageBox.StandardButton.Yes:
-                self.indexer = Index(images_dir=dirChoice.pathBar.text(
-                ), encoder_path=self.image_model_path, parent=window)
+                self.indexer = Index(
+                    images_dir=dirChoice.pathBar.text(),
+                    encoder_path=self.image_model_path,
+                    parent=window,
+                )
                 self.indexer()
 
         # Start a search as soon as the indexing thread finishes, if needed
@@ -460,20 +496,22 @@ class DragDrop(qtw.QFrame):
         imgs_dir_path = dirChoice.pathBar.text()
         dist = distChoice.currentText()
         self.df, embeddings_path = get_df_embpath(
-            self.image_model_path, imgs_dir_path, ["infos", "embeddings"])
+            self.image_model_path, imgs_dir_path, ["infos", "embeddings"]
+        )
 
         for f in files:
             # Progress bar
             self.progressBars.append(qtw.QProgressBar(self.parent()))
             self.progressBars[-1].setMinimum(0)
             self.progressBars[-1].setMaximum(self.numImages)
-            self.progressBars[-1].setToolTip('Progress bar for image search')
+            self.progressBars[-1].setToolTip("Progress bar for image search")
             self.parent().layout().addWidget(self.progressBars[-1])
 
             # start search
-            tid = len(self.progressBars)-1
+            tid = len(self.progressBars) - 1
             worker = ImSearchWorker(
-                f, self.df, self.image_model_path, embeddings_path, dist, tid=tid)
+                f, self.df, self.image_model_path, embeddings_path, dist, tid=tid
+            )
             # Account for signals
             worker.signals.finished.connect(self.threadComplete)
             worker.signals.result.connect(self.showOutput)
@@ -482,6 +520,7 @@ class DragDrop(qtw.QFrame):
             self.threadPool.start(worker)
 
         event.accept()
+
 
 # Search bar
 
@@ -508,8 +547,9 @@ class SearchBar(qtw.QLineEdit):
     def showOutput(self, result):
         searchModule = Search(self.pageSize)
         searchModule.imageSearch(result)
-        self.subWindows.append(customSubWindow(
-            self, len(self.subWindows), searchModule))
+        self.subWindows.append(
+            customSubWindow(self, len(self.subWindows), searchModule)
+        )
         self.subWindows[-1].setWindowTitle("Text to image search results")
         self.subWindows[-1].start()
 
@@ -525,24 +565,35 @@ class SearchBar(qtw.QLineEdit):
         self.progressBars[tid] = None
 
     def updateBar(self, tid):
-        self.progressBars[tid].setValue(self.progressBars[tid].value()+1)
+        self.progressBars[tid].setValue(self.progressBars[tid].value() + 1)
 
     def startSearch(self):
         imgDir = dirChoice.pathBar.text()
         _, self.imgNames, self.imgPaths = get_imgs(imgDir)
-        self.numImages = len(self.imgNames)-1
+        self.numImages = len(self.imgNames) - 1
         imgs_dir_path = dirChoice.pathBar.text()
 
         matching_df = get_df_embpath(self.image_model_path, imgs_dir_path)
 
-        if matching_df["images"].empty or not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any():
-            reply = qtw.QMessageBox.question(self, 'No index', 'No index for this directory, do you want to index it (this may take a while) ?',
-                                             qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No, qtw.QMessageBox.StandardButton.No)
+        if (
+            matching_df["images"].empty
+            or not matching_df["images"].str.fullmatch(dirChoice.pathBar.text()).any()
+        ):
+            reply = qtw.QMessageBox.question(
+                self,
+                "No index",
+                "No index for this directory, do you want to index it (this may take a while) ?",
+                qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No,
+                qtw.QMessageBox.StandardButton.No,
+            )
             if reply == qtw.QMessageBox.StandardButton.No:
                 return
             if reply == qtw.QMessageBox.StandardButton.Yes:
-                self.indexer = Index(images_dir=dirChoice.pathBar.text(
-                ), encoder_path=self.image_model_path, parent=window)
+                self.indexer = Index(
+                    images_dir=dirChoice.pathBar.text(),
+                    encoder_path=self.image_model_path,
+                    parent=window,
+                )
                 self.indexer()
 
         # Start a search as soon as the indexing finishes, if needed
@@ -556,20 +607,22 @@ class SearchBar(qtw.QLineEdit):
         self.indexer = None
         imgs_dir_path = dirChoice.pathBar.text()
         self.df, embeddings_path = get_df_embpath(
-            self.image_model_path, imgs_dir_path, ["infos", "embeddings"])
+            self.image_model_path, imgs_dir_path, ["infos", "embeddings"]
+        )
 
         # Progress bar
         self.progressBars.append(qtw.QProgressBar(self.parent()))
         self.progressBars[-1].setMinimum(0)
         self.progressBars[-1].setMaximum(self.numImages)
-        self.progressBars[-1].setToolTip('Progress bar for image search')
+        self.progressBars[-1].setToolTip("Progress bar for image search")
         self.parent().layout().addWidget(self.progressBars[-1])
         dist = distChoice.currentText()
 
         # start search
-        tid = len(self.progressBars)-1
+        tid = len(self.progressBars) - 1
         worker = TextSearchWorker(
-            self.text(), self.df, self.text_model_path, embeddings_path, dist, tid=tid)
+            self.text(), self.df, self.text_model_path, embeddings_path, dist, tid=tid
+        )
         # Account for signals
         worker.signals.finished.connect(self.threadComplete)
         worker.signals.result.connect(self.showOutput)
@@ -581,7 +634,7 @@ class SearchBar(qtw.QLineEdit):
 # Signals to manage multiprocess
 # https://www.pythonguis.com/tutorials/multithreading-pyqt-applications-qthreadpool/
 class IndexingWorkerSignals(qtc.QObject):
-    '''
+    """
     Defines the signals available from a running worker thread.
 
     Supported signals are:
@@ -596,18 +649,20 @@ class IndexingWorkerSignals(qtc.QObject):
         No data
 
 
-    '''
+    """
+
     finished = qtc.pyqtSignal()
     error = qtc.pyqtSignal(tuple)
     updateBar = qtc.pyqtSignal()
+
 
 # Indexing worker
 
 
 class IndexingWorker(qtc.QRunnable):
-    '''
+    """
     Worker thread
-    '''
+    """
 
     def __init__(self, *args, **kwargs):
         super(IndexingWorker, self).__init__()
@@ -617,9 +672,9 @@ class IndexingWorker(qtc.QRunnable):
 
     @qtc.pyqtSlot()
     def run(self):
-        '''
+        """
         Your code goes in this function
-        '''
+        """
         try:
             dbIndex.indexDir(
                 *self.args,
@@ -633,7 +688,7 @@ class IndexingWorker(qtc.QRunnable):
             self.signals.finished.emit()  # Done
 
 
-class Index():
+class Index:
     def __init__(self, images_dir, encoder_path, parent=None):
         # Parameters
         self.parent = parent
@@ -646,7 +701,7 @@ class Index():
         self.progressBar = qtw.QProgressBar(self.parent)
         self.progressBar.setMinimum(0)
         self.progressBar.setMaximum(self.num_images)
-        self.progressBar.setToolTip('Progress bar for directory indexing')
+        self.progressBar.setToolTip("Progress bar for directory indexing")
         self.parent.layout().addWidget(self.progressBar)
         self.worker = IndexingWorker(self.images_dir, self.encoder_path)
 
@@ -666,7 +721,7 @@ class Index():
         self.progressBar = None
 
     def updateBar(self):
-        self.progressBar.setValue(self.progressBar.value()+1)
+        self.progressBar.setValue(self.progressBar.value() + 1)
 
 
 # Search directory selection
@@ -697,18 +752,28 @@ class DirChoice(qtw.QFileDialog):
     def reindex(self):
         imgs_dir_path = dirChoice.pathBar.text()
         matching_df = get_df_embpath(
-            self.image_model_path, imgs_dir_path, required=["matches"])
+            self.image_model_path, imgs_dir_path, required=["matches"]
+        )
         execute_reindex = True
         if matching_df["images"].str.fullmatch(self.pathBar.text()).any():
-            reply = qtw.QMessageBox.question(self, 'Reindex', 'An index is already defined for this directory, are you sure you want to reindex (this may take a while) ?',
-                                             qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No, qtw.QMessageBox.StandardButton.No)
+            reply = qtw.QMessageBox.question(
+                self,
+                "Reindex",
+                "An index is already defined for this directory, are you sure you want to reindex (this may take a while) ?",
+                qtw.QMessageBox.StandardButton.Yes | qtw.QMessageBox.StandardButton.No,
+                qtw.QMessageBox.StandardButton.No,
+            )
             if reply == qtw.QMessageBox.StandardButton.No:
                 execute_reindex = False
         if execute_reindex:
-            drop_index = matching_df.loc[matching_df["images"]
-                                         == self.pathBar.text()].index
-            self.indexer = Index(images_dir=dirChoice.pathBar.text(
-            ), encoder_path=self.image_model_path, parent=window)
+            drop_index = matching_df.loc[
+                matching_df["images"] == self.pathBar.text()
+            ].index
+            self.indexer = Index(
+                images_dir=dirChoice.pathBar.text(),
+                encoder_path=self.image_model_path,
+                parent=window,
+            )
             self.indexer()
 
 
@@ -718,7 +783,7 @@ with open(SETTINGS_PATH, "r") as f:
 
 # Create main window
 app = qtw.QApplication([])
-app.setStyle('macos')
+app.setStyle("macos")
 window = qtw.QWidget()
 layout = qtw.QVBoxLayout()
 layoutLine0 = qtw.QHBoxLayout()
@@ -735,15 +800,19 @@ layout.addLayout(layoutLine3)
 # Setup widgets
 dirChoice = DirChoice(window)
 distChoice = qtw.QComboBox(window)
-distChoice.addItems(
-    ['Cosine', 'Euclidean', 'Manhattan', 'Chebyshev', 'Jaccard'])
-distChoice.setToolTip('Distance used for similarity search')
+distChoice.addItems(["Cosine", "Euclidean", "Manhattan", "Chebyshev", "Jaccard"])
+distChoice.setToolTip("Distance used for similarity search")
 distChoice.setCurrentIndex(distChoice.findText(settings["dist"]))
 pageSize = qtw.QSpinBox(window)
 pageSize.setValue(settings["page_size"])
 pageSize.setToolTip("Number of images on each page")
+imageWidth = qtw.QSpinBox(window)
+# Maximum value allowed by PyQT. Default is 99 which is insufficient for our usecase.
+imageWidth.setMaximum(2147483647)
+imageWidth.setValue(settings["image_width"])
+imageWidth.setToolTip("Width of images")
 dragDrop = DragDrop(distChoice, pageSize, window)
-queryBox = SearchBar(pageSize, window, placeholderText='Enter query')
+queryBox = SearchBar(pageSize, window, placeholderText="Enter query")
 
 # Place widgets
 window.resize(450, 500)
@@ -752,6 +821,7 @@ layoutLine0.addWidget(dirChoice.pathBar)
 layoutLine0.addWidget(dirChoice.reindexButton)
 layoutLine1.addWidget(distChoice)
 layoutLine1.addWidget(pageSize)
+layoutLine1.addWidget(imageWidth)
 layoutLine2.addWidget(queryBox)
 layoutLine3.addWidget(dragDrop)
 window.show()

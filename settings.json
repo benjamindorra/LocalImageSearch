@@ -1,5 +1,6 @@
 {
-    "search_dir": "/home/benj/Images",
-    "dist": "Euclidean",
-    "page_size": 10
+    "search_dir": "/home/benj/Projects/DatabaseDrawingsTerezin/images",
+    "dist": "Cosine",
+    "page_size": 10,
+    "image_width": 512
 }
